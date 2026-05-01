@@ -89,11 +89,20 @@ teardown() {
   [ "$status" -eq 5 ]
 }
 
-@test "codex failure surfaces stderr (no silent dev/null)" {
+@test "codex failure exposes stderr file path (default safe)" {
   install_codex_mock_failing 7
-  run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 7 ]
-  [[ "$stderr" == *"mock codex error"* ]] || [[ "$output" == *"mock codex error"* ]]
+  # default: don't print stderr content (may leak secrets); only point to the file
+  [[ "$stderr" == *"codex stderr saved to"* ]] || [[ "$stderr" == *"DUAL_SHOW_STDERR"* ]]
+  [[ "$stderr" != *"mock codex error"* ]]
+}
+
+@test "DUAL_SHOW_STDERR=1 prints stderr tail on failure (explicit opt-in)" {
+  install_codex_mock_failing 7
+  DUAL_SHOW_STDERR=1 run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 7 ]
+  [[ "$stderr" == *"mock codex error"* ]]
 }
 
 @test "codex success does not leak stderr to stdout" {
@@ -151,7 +160,7 @@ echo "codex internal failure" >&2
 exit 124
 EOF
   chmod +x "$TEST_TMP/bin/codex"
-  PATH="$TEST_TMP/bin" run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  PATH="$TEST_TMP/bin" DUAL_ALLOW_NO_TIMEOUT=1 run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 124 ]
   [[ "$stderr" != *"codex timed out after"* ]]
 }
@@ -225,15 +234,24 @@ EOF
   [ -f "$MARKER" ]
 }
 
-@test "runs without timeout when neither timeout nor gtimeout is available" {
+@test "refuses to run without timeout unless DUAL_ALLOW_NO_TIMEOUT=1" {
   for tool in mktemp rm cat tail head env bash basename dirname touch; do
     if path="$(command -v "$tool")"; then
       ln -sf "$path" "$TEST_TMP/bin/$tool"
     fi
   done
-  WARN_MARKER="$TEST_TMP/warn.log"
   PATH="$TEST_TMP/bin" run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+  [[ "$stderr" == *"DUAL_ALLOW_NO_TIMEOUT"* ]]
+}
+
+@test "runs without timeout when DUAL_ALLOW_NO_TIMEOUT=1 (explicit opt-in)" {
+  for tool in mktemp rm cat tail head env bash basename dirname touch; do
+    if path="$(command -v "$tool")"; then
+      ln -sf "$path" "$TEST_TMP/bin/$tool"
+    fi
+  done
+  PATH="$TEST_TMP/bin" DUAL_ALLOW_NO_TIMEOUT=1 run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 0 ]
-  [[ "$stderr" == *"Warning: timeout/gtimeout not found"* ]]
   [[ "$output" == *"STDIN:"* ]]
 }

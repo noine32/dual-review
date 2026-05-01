@@ -102,10 +102,6 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 127
 fi
 
-# mktemp -t is GNU/BSD-different; use explicit template under TMPDIR for portability.
-STDERR_FILE="$(mktemp "${TMPDIR:-/tmp}/dual-codex-err.XXXXXX")"
-trap 'rm -f -- "$STDERR_FILE"' EXIT
-
 # Detect timeout binary (GNU coreutils on Linux; gtimeout on macOS via brew).
 TIMEOUT_BIN=""
 if command -v timeout >/dev/null 2>&1; then
@@ -121,6 +117,17 @@ GIT_FLAG=()
 if [[ "${DUAL_REQUIRE_GIT_REPO:-0}" != "1" ]]; then
   GIT_FLAG=(--skip-git-repo-check)
 fi
+
+# Refuse to run without a timeout binary unless explicitly opted in.
+# Hanging codex calls block dogfood and are hard to abort.
+if [[ -z "$TIMEOUT_BIN" && "${DUAL_ALLOW_NO_TIMEOUT:-0}" != "1" ]]; then
+  echo "ERROR: timeout/gtimeout not found in PATH. Set DUAL_ALLOW_NO_TIMEOUT=1 to run without a timeout (may hang)." >&2
+  exit 64
+fi
+
+# mktemp -t is GNU/BSD-different; use explicit template under TMPDIR for portability.
+STDERR_FILE="$(mktemp "${TMPDIR:-/tmp}/dual-codex-err.XXXXXX")"
+trap 'rm -f "$STDERR_FILE"' EXIT
 
 set +e
 if [[ -n "$TIMEOUT_BIN" ]]; then
@@ -153,8 +160,16 @@ if [[ $RC -ne 0 ]]; then
     echo "ERROR: codex timed out after ${TIMEOUT}s" >&2
   fi
   if [[ -s "$STDERR_FILE" ]]; then
-    echo "--- codex stderr (last 50 lines) ---" >&2
-    tail -n 50 "$STDERR_FILE" >&2
+    if [[ "${DUAL_SHOW_STDERR:-0}" == "1" ]]; then
+      echo "--- codex stderr (last 50 lines) ---" >&2
+      tail -n 50 "$STDERR_FILE" >&2
+    else
+      # Default: don't print stderr content (may contain secrets/internal paths).
+      # Copy to a non-trap-cleaned location so the user can inspect it.
+      KEEP_FILE="$(mktemp "${TMPDIR:-/tmp}/dual-codex-err.kept.XXXXXX" 2>/dev/null || echo "$STDERR_FILE")"
+      cp "$STDERR_FILE" "$KEEP_FILE" 2>/dev/null || KEEP_FILE="$STDERR_FILE"
+      echo "codex stderr saved to: $KEEP_FILE (set DUAL_SHOW_STDERR=1 to print inline)" >&2
+    fi
   fi
 fi
 exit "$RC"

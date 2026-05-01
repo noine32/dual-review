@@ -26,15 +26,15 @@ case "$SKILL_DST" in -*) echo "ERROR: SKILL_DST must not start with '-': $SKILL_
 mkdir -p "$(dirname "$SKILL_DST")"
 
 if [[ -L "$SKILL_DST" ]]; then
-  # readlink lacks `--` on BSD/macOS; use without it.
+  # readlink/rm/mv on BSD/macOS may not accept `--`; rely on the dash-prefix guard above.
   link_target="$(readlink "$SKILL_DST" 2>/dev/null || true)"
   echo "Removing old symlink: $SKILL_DST${link_target:+ -> $link_target}"
-  rm -- "$SKILL_DST"
+  rm -f "$SKILL_DST"
 elif [[ -e "$SKILL_DST" ]]; then
   # Use date+pid+random to avoid collisions when run concurrently or in same second.
   BACKUP="${SKILL_DST}.bak.$(date +%s).$$.${RANDOM}"
   echo "Backing up existing path to: $BACKUP"
-  mv -- "$SKILL_DST" "$BACKUP"
+  mv "$SKILL_DST" "$BACKUP"
 fi
 
 # `ln -s --` is not portable to BSD/macOS; rely on path-starts-with-dash guard above.
