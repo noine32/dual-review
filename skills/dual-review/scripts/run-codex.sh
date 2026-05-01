@@ -3,10 +3,10 @@
 #
 # Usage: run-codex.sh <codex-mode> <prompt-file>
 #
-# codex-mode presets:
-#   review          gpt-5.2-mini, reasoning=medium  (parallel reviewer)
-#   plan-critique   gpt-5.2,      reasoning=high    (plan critique R2)
-#   critique        gpt-5.2,      reasoning=high    (artifact critique R2)
+# codex-mode presets (ChatGPT Plus only supports gpt-5.2 — no -mini/-max):
+#   review          gpt-5.2, reasoning=medium  (parallel reviewer, lighter)
+#   plan-critique   gpt-5.2, reasoning=high    (plan critique R2)
+#   critique        gpt-5.2, reasoning=high    (artifact critique R2)
 #
 # Env overrides: DUAL_MODEL, DUAL_REASONING, DUAL_TIMEOUT (default 300s)
 #
@@ -27,9 +27,9 @@ usage() {
 Usage: $(basename "$0") <codex-mode> <prompt-file>
 
 codex-mode:
-  review          gpt-5.2-mini reasoning=medium
-  plan-critique   gpt-5.2      reasoning=high
-  critique        gpt-5.2      reasoning=high
+  review          gpt-5.2 reasoning=medium
+  plan-critique   gpt-5.2 reasoning=high
+  critique        gpt-5.2 reasoning=high
 
 Env overrides: DUAL_MODEL, DUAL_REASONING, DUAL_TIMEOUT (default ${DEFAULT_TIMEOUT}s)
 EOF
@@ -45,7 +45,7 @@ PROMPT_FILE="$2"
 
 case "$CODEX_MODE" in
   review)
-    MODEL="gpt-5.2-mini"
+    MODEL="gpt-5.2"
     REASONING="medium"
     ;;
   plan-critique|critique)
@@ -73,19 +73,48 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 127
 fi
 
+STDERR_FILE="$(mktemp -t dual-codex-err-XXXXXX)"
+trap 'rm -f "$STDERR_FILE"' EXIT
+
+# Detect timeout binary (GNU coreutils on Linux; gtimeout on macOS via brew).
+TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="gtimeout"
+fi
+
 set +e
-timeout --foreground "${TIMEOUT}s" \
+if [[ -n "$TIMEOUT_BIN" ]]; then
+  "$TIMEOUT_BIN" --foreground "${TIMEOUT}s" \
+    codex exec \
+      --skip-git-repo-check \
+      --sandbox read-only \
+      -m "$MODEL" \
+      --config "model_reasoning_effort=\"${REASONING}\"" \
+      < "$PROMPT_FILE" \
+      2>"$STDERR_FILE"
+  RC=$?
+else
+  echo "Warning: timeout/gtimeout not found; running codex without timeout" >&2
   codex exec \
     --skip-git-repo-check \
     --sandbox read-only \
     -m "$MODEL" \
     --config "model_reasoning_effort=\"${REASONING}\"" \
     < "$PROMPT_FILE" \
-    2>/dev/null
-RC=$?
+    2>"$STDERR_FILE"
+  RC=$?
+fi
 set -e
 
-if [[ $RC -eq 124 ]]; then
-  echo "ERROR: codex timed out after ${TIMEOUT}s" >&2
+if [[ $RC -ne 0 ]]; then
+  if [[ $RC -eq 124 ]]; then
+    echo "ERROR: codex timed out after ${TIMEOUT}s" >&2
+  fi
+  if [[ -s "$STDERR_FILE" ]]; then
+    echo "--- codex stderr (last 50 lines) ---" >&2
+    tail -n 50 "$STDERR_FILE" >&2
+  fi
 fi
-exit $RC
+exit "$RC"

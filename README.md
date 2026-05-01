@@ -74,11 +74,11 @@ See `skills/dual-review/SKILL.md` for the full trigger list and anti-misfire rul
 
 | Var | Default per mode | Effect |
 |---|---|---|
-| `DUAL_MODEL` | `gpt-5.2` or `gpt-5.2-mini` | Override Codex model |
+| `DUAL_MODEL` | `gpt-5.2` (all modes) | Override Codex model |
 | `DUAL_REASONING` | `high` or `medium` | Override reasoning effort |
 | `DUAL_TIMEOUT` | `300` | Codex timeout in seconds |
 
-ChatGPT Plus does **not** support `gpt-5.2-max` or `xhigh` reasoning — these defaults stay within Plus limits.
+**ChatGPT Plus only supports `gpt-5.2`.** Modes differ by `reasoning_effort` (review=`medium`, plan/critique=`high`) instead of model. `gpt-5.2-mini` / `gpt-5.2-max` and `xhigh` reasoning are Pro/Business-only and rejected by the API for Plus accounts.
 
 ## Smoke test (manual)
 
