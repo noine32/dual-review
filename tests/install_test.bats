@@ -48,3 +48,26 @@ teardown() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"skill source missing"* ]]
 }
+
+@test "uninstall removes symlink" {
+  "$REPO_ROOT/install.sh"
+  [ -L "$CLAUDE_HOME/skills/dual-review" ]
+  run "$REPO_ROOT/uninstall.sh"
+  [ "$status" -eq 0 ]
+  [ ! -e "$CLAUDE_HOME/skills/dual-review" ]
+}
+
+@test "uninstall is no-op when nothing installed" {
+  run "$REPO_ROOT/uninstall.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Nothing to remove"* ]]
+}
+
+@test "uninstall refuses to remove non-symlink directory" {
+  mkdir -p "$CLAUDE_HOME/skills/dual-review"
+  echo "user content" > "$CLAUDE_HOME/skills/dual-review/keep.txt"
+  run "$REPO_ROOT/uninstall.sh"
+  [ "$status" -ne 0 ]
+  [ -d "$CLAUDE_HOME/skills/dual-review" ]
+  [ -f "$CLAUDE_HOME/skills/dual-review/keep.txt" ]
+}
