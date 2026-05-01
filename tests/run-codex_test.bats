@@ -73,7 +73,7 @@ teardown() {
 
 @test "missing codex CLI exits with code 127" {
   rm "$TEST_TMP/bin/codex"
-  run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  PATH="$TEST_TMP/bin:/usr/bin:/bin" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 127 ]
 }
 
