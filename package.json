@@ -1,0 +1,17 @@
+{
+  "name": "dual-review",
+  "version": "0.1.0",
+  "description": "Claude Code skill for dual-AI (Claude + Codex) code review, planning, and critique",
+  "private": true,
+  "scripts": {
+    "test": "bats tests/"
+  },
+  "devDependencies": {
+    "bats": "^1.11.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/noine32/dual-review.git"
+  },
+  "license": "MIT"
+}
