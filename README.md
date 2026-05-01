@@ -16,13 +16,20 @@ Claude orchestrates and renders. Codex always runs **read-only** (`--sandbox rea
 
 ## Prerequisites
 
-- [Claude Code](https://claude.com/claude-code) installed
+- [Claude Code](https://claude.com/claude-code) installed (any of: native macOS / Linux / WSL2 / Windows)
 - [Codex CLI](https://github.com/openai/codex) >= 0.57 with ChatGPT Plus account (`codex login`)
-- `bash` 3.2+ (macOS default works; uses `${RANDOM}` and `[[ ]]` only)
-- `timeout` (Linux GNU coreutils) **or** `gtimeout` (macOS via `brew install coreutils`) — **optional**: if neither is available, the script warns and runs without a timeout
+- `bash` (any of):
+  - macOS / Linux: built-in (3.2+)
+  - WSL2: built-in
+  - Windows native: install [Git for Windows](https://git-scm.com/download/win) (provides Git Bash)
+- `timeout` (Linux GNU coreutils) **or** `gtimeout` (macOS via `brew install coreutils`) — optional but **recommended**:
+  - Without it, set `DUAL_ALLOW_NO_TIMEOUT=1` to opt in to no-timeout execution (default refuses to run, to avoid hangs)
+  - Windows native does not ship `timeout`; set the env var as shown in the Windows install section
 - `gh` CLI (only for `critique --pr`)
 
 ## Install
+
+### Linux / macOS / WSL2
 
 ```bash
 git clone https://github.com/noine32/dual-review.git ~/dual-review
@@ -32,16 +39,61 @@ cd ~/dual-review
 
 This creates a symlink: `~/.claude/skills/dual-review` -> `~/dual-review/skills/dual-review`. To update later, just `git pull` in the cloned dir.
 
-### Custom Claude home
-
+Custom Claude home:
 ```bash
 CLAUDE_HOME=/path/to/.claude ./install.sh
 ```
 
+### Windows (native, with PowerShell)
+
+If you run Claude Code natively on Windows (not via WSL), use the PowerShell installer:
+
+```powershell
+git clone https://github.com/noine32/dual-review.git $HOME\dual-review
+cd $HOME\dual-review
+.\install.ps1
+```
+
+This creates a symlink at `%USERPROFILE%\.claude\skills\dual-review` -> `%USERPROFILE%\dual-review\skills\dual-review`.
+
+**Required**:
+- **Developer Mode ON** (Settings → Update & Security → For developers → "Developer Mode") so non-admin users can create symlinks. Alternatively run PowerShell **as Administrator**.
+- **Git for Windows** (provides `bash`, used by `scripts/run-codex.sh` at runtime). Download: <https://git-scm.com/download/win>
+- **Codex CLI**: `npm install -g @openai/codex` then `codex login`
+
+**Recommended Windows env**:
+```powershell
+# No 'timeout --foreground' on Windows; opt-in to no-timeout execution.
+[System.Environment]::SetEnvironmentVariable('DUAL_ALLOW_NO_TIMEOUT', '1', 'User')
+```
+Restart the shell after setting this.
+
+Custom Claude home:
+```powershell
+$env:CLAUDE_HOME = 'C:\custom\.claude'; .\install.ps1
+```
+
+### Using both WSL2 and Windows-native Claude Code
+
+The two environments have separate `~/.claude` directories, so install in **both**:
+
+| Environment | Cloned to | Install command |
+|---|---|---|
+| WSL2 | `~/dual-review` (Linux home) | `./install.sh` |
+| Windows native | `%USERPROFILE%\dual-review` | `.\install.ps1` |
+
+After both installs, the skill works in both Claude Code modes. Since the two clones are separate, `git pull` in each location to update independently.
+
 ## Uninstall
 
 ```bash
+# Linux / macOS / WSL2
 ~/dual-review/uninstall.sh
+```
+
+```powershell
+# Windows native
+& "$HOME\dual-review\uninstall.ps1"
 ```
 
 Only removes the symlink. Backups (`~/.claude/skills/dual-review.bak.*`) and the cloned repo are left alone.
