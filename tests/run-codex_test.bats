@@ -24,6 +24,12 @@ teardown() {
   [[ "$output" == *"<--skip-git-repo-check>"* ]]
 }
 
+@test "DUAL_REQUIRE_GIT_REPO=1 omits --skip-git-repo-check" {
+  DUAL_REQUIRE_GIT_REPO=1 run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"<--skip-git-repo-check>"* ]]
+}
+
 @test "plan-critique mode passes -m gpt-5.2 and reasoning=high" {
   run "$REPO_ROOT/$SCRIPT" plan-critique "$PROMPT"
   [ "$status" -eq 0 ]
@@ -104,6 +110,7 @@ EOF
 }
 
 @test "DUAL_TIMEOUT enforces timeout (slow codex killed)" {
+  command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1 || skip "timeout/gtimeout not available"
   install_codex_mock_slow 10
   DUAL_TIMEOUT=1 run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 124 ]
@@ -150,6 +157,7 @@ EOF
 }
 
 @test "RC 124 IS labeled as timeout when timeout binary was actually used" {
+  command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1 || skip "timeout/gtimeout not available"
   install_codex_mock_slow 10
   DUAL_TIMEOUT=1 run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 124 ]
@@ -161,17 +169,38 @@ EOF
   [ "$status" -eq 64 ]
 }
 
-@test "DUAL_REASONING accepts low/medium/high/xhigh" {
+@test "DUAL_REASONING accepts low, medium, high (Plus-safe levels)" {
   for level in low medium high; do
     DUAL_REASONING="$level" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
     [ "$status" -eq 0 ]
   done
 }
 
+@test "DUAL_REASONING rejects xhigh (Pro/Business only)" {
+  DUAL_REASONING="xhigh" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+}
+
 @test "DUAL_MODEL rejects empty value via env override" {
   # Note: empty env var via :- defaults; this tests an intentionally empty value
   DUAL_MODEL=" " run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 64 ]
+}
+
+@test "DUAL_MODEL rejects gpt-5.2-mini (not supported on Plus)" {
+  DUAL_MODEL="gpt-5.2-mini" run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+  [[ "$stderr" == *"Plus"* ]] || [[ "$stderr" == *"gpt-5.2"* ]]
+}
+
+@test "DUAL_MODEL rejects gpt-5.2-max (not supported on Plus)" {
+  DUAL_MODEL="gpt-5.2-max" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+}
+
+@test "DUAL_MODEL accepts only gpt-5.2" {
+  DUAL_MODEL="gpt-5.2" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 0 ]
 }
 
 @test "falls back to gtimeout when timeout is unavailable" {

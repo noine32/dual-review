@@ -8,7 +8,8 @@ export REPO_ROOT
 # setup_test_env: create isolated tmp dir + mock codex on PATH.
 # Sets TEST_TMP, CLAUDE_HOME, and prepends $TEST_TMP/bin to PATH.
 setup_test_env() {
-  TEST_TMP="$(mktemp -d -t dualrev-XXXXXX)"
+  # mktemp -t differs between GNU/BSD; use explicit template under TMPDIR for portability.
+  TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/dualrev.XXXXXX")"
   export TEST_TMP
   export CLAUDE_HOME="$TEST_TMP/.claude"
   mkdir -p "$TEST_TMP/bin"

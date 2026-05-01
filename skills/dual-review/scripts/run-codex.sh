@@ -81,11 +81,21 @@ case "$REASONING" in
     ;;
 esac
 
-# MODEL: reject empty/whitespace-only values; allow the actual model name to pass through.
+# MODEL: reject empty/whitespace-only values.
 if [[ -z "${MODEL// }" ]]; then
   echo "ERROR: DUAL_MODEL must not be empty or whitespace-only" >&2
   exit 64
 fi
+
+# MODEL: ChatGPT Plus accounts only support gpt-5.2.
+# (gpt-5.2-mini / gpt-5.2-max are Pro/Business-only and rejected by the API for Plus.)
+case "$MODEL" in
+  gpt-5.2) ;;
+  *)
+    echo "ERROR: ChatGPT Plus only supports model 'gpt-5.2' (got: '$MODEL'). Pro/Business plans are required for gpt-5.2-mini / gpt-5.2-max." >&2
+    exit 64
+    ;;
+esac
 
 if ! command -v codex >/dev/null 2>&1; then
   echo "ERROR: codex CLI not found in PATH" >&2
@@ -104,11 +114,19 @@ elif command -v gtimeout >/dev/null 2>&1; then
   TIMEOUT_BIN="gtimeout"
 fi
 
+# --skip-git-repo-check is on by default for UX (skill works in any working dir).
+# Set DUAL_REQUIRE_GIT_REPO=1 to drop the flag and let codex enforce its own
+# git-repo presence check (more conservative, may break dogfood in non-git dirs).
+GIT_FLAG=()
+if [[ "${DUAL_REQUIRE_GIT_REPO:-0}" != "1" ]]; then
+  GIT_FLAG=(--skip-git-repo-check)
+fi
+
 set +e
 if [[ -n "$TIMEOUT_BIN" ]]; then
   "$TIMEOUT_BIN" --foreground "${TIMEOUT}s" \
     codex exec \
-      --skip-git-repo-check \
+      "${GIT_FLAG[@]}" \
       --sandbox read-only \
       -m "$MODEL" \
       --config "model_reasoning_effort=\"${REASONING}\"" \
@@ -116,9 +134,9 @@ if [[ -n "$TIMEOUT_BIN" ]]; then
       2>"$STDERR_FILE"
   RC=$?
 else
-  echo "Warning: timeout/gtimeout not found; running codex without timeout" >&2
+  echo "Warning: timeout/gtimeout not found; running codex without timeout (Ctrl-C to abort if it hangs)" >&2
   codex exec \
-    --skip-git-repo-check \
+    "${GIT_FLAG[@]}" \
     --sandbox read-only \
     -m "$MODEL" \
     --config "model_reasoning_effort=\"${REASONING}\"" \

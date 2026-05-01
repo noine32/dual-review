@@ -18,7 +18,8 @@ Claude orchestrates and renders. Codex always runs **read-only** (`--sandbox rea
 
 - [Claude Code](https://claude.com/claude-code) installed
 - [Codex CLI](https://github.com/openai/codex) >= 0.57 with ChatGPT Plus account (`codex login`)
-- `bash` 4+, GNU `coreutils` (`timeout`)
+- `bash` 3.2+ (macOS default works; uses `${RANDOM}` and `[[ ]]` only)
+- `timeout` (Linux GNU coreutils) **or** `gtimeout` (macOS via `brew install coreutils`) — **optional**: if neither is available, the script warns and runs without a timeout
 - `gh` CLI (only for `critique --pr`)
 
 ## Install
@@ -60,13 +61,17 @@ Only removes the symlink. Backups (`~/.claude/skills/dual-review.bak.*`) and the
 
 ### Natural-language triggers
 
-The skill auto-fires on phrases like:
+**Auto-fire** (explicit phrases only):
 
-- 「Codex にもレビューさせて」
-- 「もう一人の AI に批判させて」
-- 「セカンドオピニオン欲しい」
-- 「devil's advocate で見て」
-- 「見落としないか確認」 (after Claude just produced a plan / code)
+- 「Codex にもレビューさせて」 / 「Codex に批判させて」
+- 「もう一人の AI に〜」 / 「別モデルで〜」
+- 「セカンドオピニオン欲しい」 / 「devil's advocate で見て」 / 「赤チーム」
+
+**Suggest only** (Claude offers `/dual` but waits for user confirmation):
+
+- Ambiguous phrases that overlap with everyday conversation: 「見落としないか」「本当にこれでいい？」「批判的に見て」「もっと良い方法ない？」
+- Sensitive areas: auth / payments / security
+- Pre-merge / large PR review / architectural choices
 
 See `skills/dual-review/SKILL.md` for the full trigger list and anti-misfire rules.
 

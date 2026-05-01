@@ -18,6 +18,11 @@ if [[ ! -d "$SKILL_SRC" ]]; then
   exit 1
 fi
 
+# Defensive: refuse paths starting with `-` to prevent option injection
+# (we removed `--` from `ln -s` for BSD/macOS compatibility).
+case "$SKILL_SRC" in -*) echo "ERROR: SKILL_SRC must not start with '-': $SKILL_SRC" >&2; exit 1;; esac
+case "$SKILL_DST" in -*) echo "ERROR: SKILL_DST must not start with '-': $SKILL_DST" >&2; exit 1;; esac
+
 mkdir -p "$(dirname "$SKILL_DST")"
 
 if [[ -L "$SKILL_DST" ]]; then
@@ -32,7 +37,8 @@ elif [[ -e "$SKILL_DST" ]]; then
   mv -- "$SKILL_DST" "$BACKUP"
 fi
 
-ln -s -- "$SKILL_SRC" "$SKILL_DST"
+# `ln -s --` is not portable to BSD/macOS; rely on path-starts-with-dash guard above.
+ln -s "$SKILL_SRC" "$SKILL_DST"
 echo "Installed: $SKILL_DST -> $SKILL_SRC"
 
 if ! command -v codex >/dev/null 2>&1; then
