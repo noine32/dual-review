@@ -71,3 +71,57 @@ teardown() {
   [ -d "$CLAUDE_HOME/skills/dual-review" ]
   [ -f "$CLAUDE_HOME/skills/dual-review/keep.txt" ]
 }
+
+@test "install fails clearly when HOME and CLAUDE_HOME are both unset" {
+  run env -i PATH="$PATH" bash "$REPO_ROOT/install.sh"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"HOME"* ]] || [[ "$output" == *"HOME"* ]]
+}
+
+@test "install respects CLAUDE_HOME even when HOME is unset" {
+  # CLAUDE_HOME is set, HOME is unset → must succeed
+  run env -i PATH="$PATH" CLAUDE_HOME="$CLAUDE_HOME" bash "$REPO_ROOT/install.sh"
+  [ "$status" -eq 0 ]
+  [ -L "$CLAUDE_HOME/skills/dual-review" ]
+}
+
+@test "install creates unique backup names even within the same second" {
+  # First backup: real dir
+  mkdir -p "$CLAUDE_HOME/skills/dual-review"
+  echo "v1" > "$CLAUDE_HOME/skills/dual-review/file.txt"
+  run "$REPO_ROOT/install.sh"
+  [ "$status" -eq 0 ]
+  shopt -s nullglob
+  backups_after_first=("$CLAUDE_HOME/skills/dual-review.bak."*)
+  [ "${#backups_after_first[@]}" -eq 1 ]
+
+  # Second: replace symlink with another real dir, install again immediately
+  rm "$CLAUDE_HOME/skills/dual-review"
+  mkdir -p "$CLAUDE_HOME/skills/dual-review"
+  echo "v2" > "$CLAUDE_HOME/skills/dual-review/file.txt"
+  run "$REPO_ROOT/install.sh"
+  [ "$status" -eq 0 ]
+  backups_after_second=("$CLAUDE_HOME/skills/dual-review.bak."*)
+  # We expect 2 distinct backups (no collision -> mv didn't fail)
+  [ "${#backups_after_second[@]}" -eq 2 ]
+}
+
+@test "install backs up regular file (not just dir)" {
+  # rare case: SKILL_DST is a regular file
+  mkdir -p "$CLAUDE_HOME/skills"
+  echo "stray file" > "$CLAUDE_HOME/skills/dual-review"
+  run "$REPO_ROOT/install.sh"
+  [ "$status" -eq 0 ]
+  [ -L "$CLAUDE_HOME/skills/dual-review" ]
+  shopt -s nullglob
+  backups=("$CLAUDE_HOME/skills/dual-review.bak."*)
+  [ "${#backups[@]}" -eq 1 ]
+  [ -f "${backups[0]}" ]
+}
+
+@test "install handles CLAUDE_HOME with spaces in path" {
+  SPACE_HOME="$TEST_TMP/has space/.claude"
+  run env CLAUDE_HOME="$SPACE_HOME" "$REPO_ROOT/install.sh"
+  [ "$status" -eq 0 ]
+  [ -L "$SPACE_HOME/skills/dual-review" ]
+}

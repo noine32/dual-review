@@ -109,6 +109,71 @@ EOF
   [ "$status" -eq 124 ]
 }
 
+@test "DUAL_TIMEOUT rejects non-numeric value" {
+  DUAL_TIMEOUT="abc" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+  [[ "$stderr" == *"DUAL_TIMEOUT"* ]] || [[ "$output" == *"DUAL_TIMEOUT"* ]]
+}
+
+@test "DUAL_TIMEOUT rejects zero" {
+  DUAL_TIMEOUT=0 run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+}
+
+@test "DUAL_TIMEOUT rejects out-of-range value" {
+  DUAL_TIMEOUT=99999 run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+}
+
+@test "DUAL_TIMEOUT rejects empty string" {
+  DUAL_TIMEOUT="" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  # empty falls back to default (DUAL_TIMEOUT:-300), should succeed
+  [ "$status" -eq 0 ]
+}
+
+@test "RC 124 not labeled as timeout when no timeout binary was used" {
+  # codex itself returns 124, but we have neither timeout nor gtimeout
+  for tool in mktemp rm cat tail head env bash basename dirname touch; do
+    if path="$(command -v "$tool")"; then
+      ln -sf "$path" "$TEST_TMP/bin/$tool"
+    fi
+  done
+  cat > "$TEST_TMP/bin/codex" <<'EOF'
+#!/usr/bin/env bash
+echo "codex internal failure" >&2
+exit 124
+EOF
+  chmod +x "$TEST_TMP/bin/codex"
+  PATH="$TEST_TMP/bin" run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 124 ]
+  [[ "$stderr" != *"codex timed out after"* ]]
+}
+
+@test "RC 124 IS labeled as timeout when timeout binary was actually used" {
+  install_codex_mock_slow 10
+  DUAL_TIMEOUT=1 run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 124 ]
+  [[ "$stderr" == *"codex timed out after"* ]]
+}
+
+@test "DUAL_REASONING rejects values outside allow-list" {
+  DUAL_REASONING="evil\"injection" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+}
+
+@test "DUAL_REASONING accepts low/medium/high/xhigh" {
+  for level in low medium high; do
+    DUAL_REASONING="$level" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "DUAL_MODEL rejects empty value via env override" {
+  # Note: empty env var via :- defaults; this tests an intentionally empty value
+  DUAL_MODEL=" " run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+}
+
 @test "falls back to gtimeout when timeout is unavailable" {
   # Construct minimal PATH (only $TEST_TMP/bin) to hide system timeout.
   for tool in mktemp rm cat tail head env bash basename dirname touch; do

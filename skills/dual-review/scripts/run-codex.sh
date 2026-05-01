@@ -68,13 +68,33 @@ MODEL="${DUAL_MODEL:-$MODEL}"
 REASONING="${DUAL_REASONING:-$REASONING}"
 TIMEOUT="${DUAL_TIMEOUT:-$DEFAULT_TIMEOUT}"
 
+if [[ ! "$TIMEOUT" =~ ^[0-9]+$ ]] || (( TIMEOUT < 1 || TIMEOUT > 3600 )); then
+  echo "ERROR: DUAL_TIMEOUT must be an integer between 1 and 3600 (got: '$TIMEOUT')" >&2
+  exit 64
+fi
+
+case "$REASONING" in
+  low|medium|high) ;;
+  *)
+    echo "ERROR: DUAL_REASONING must be one of: low, medium, high (got: '$REASONING')" >&2
+    exit 64
+    ;;
+esac
+
+# MODEL: reject empty/whitespace-only values; allow the actual model name to pass through.
+if [[ -z "${MODEL// }" ]]; then
+  echo "ERROR: DUAL_MODEL must not be empty or whitespace-only" >&2
+  exit 64
+fi
+
 if ! command -v codex >/dev/null 2>&1; then
   echo "ERROR: codex CLI not found in PATH" >&2
   exit 127
 fi
 
-STDERR_FILE="$(mktemp -t dual-codex-err-XXXXXX)"
-trap 'rm -f "$STDERR_FILE"' EXIT
+# mktemp -t is GNU/BSD-different; use explicit template under TMPDIR for portability.
+STDERR_FILE="$(mktemp "${TMPDIR:-/tmp}/dual-codex-err.XXXXXX")"
+trap 'rm -f -- "$STDERR_FILE"' EXIT
 
 # Detect timeout binary (GNU coreutils on Linux; gtimeout on macOS via brew).
 TIMEOUT_BIN=""
@@ -109,7 +129,9 @@ fi
 set -e
 
 if [[ $RC -ne 0 ]]; then
-  if [[ $RC -eq 124 ]]; then
+  # Only label 124 as timeout when timeout binary was actually used.
+  # Otherwise, codex itself may have returned 124 for unrelated reasons.
+  if [[ $RC -eq 124 && -n "$TIMEOUT_BIN" ]]; then
     echo "ERROR: codex timed out after ${TIMEOUT}s" >&2
   fi
   if [[ -s "$STDERR_FILE" ]]; then
