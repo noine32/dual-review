@@ -51,6 +51,11 @@ cd /home/me/dual-review
 
 Claude はターゲットパスを見て、必要に応じて `CODEX_CD` を `git rev-parse --show-toplevel` または対象ファイルのプロジェクト root に設定してから `run-codex.sh` を呼ぶこと。
 
+**Windows native 環境の追加注意**:
+- パスは MSYS 形式 (`/o/path`) が必要。Windows 形式 (`O:\path`) を渡しても `cygpath` があれば自動変換されるが、無い環境では手動で MSYS 形式を渡す
+- Claude Code の `Write` ツールの `/tmp` が bash の `/tmp` と一致しない場合がある。プロンプトファイル不在エラーが出たら `bash -c 'cat > /tmp/... <<EOF ... EOF'` の heredoc 経由に切り替える
+- `DUAL_REASONING=low` で sandbox の "shell command blocked" が稀に発生。`medium` に戻す
+
 ## When to invoke
 
 ### 自動起動の条件 (層1)
@@ -95,8 +100,9 @@ Claude はターゲットパスを見て、必要に応じて `CODEX_CD` を `gi
 
 **スケーリング指針 (実環境テストで判明した制約)**:
 - **1 リクエストのファイル数は 5〜7 が目安**。19 ファイル全件を一括投入すると `gpt-5.2 reasoning=medium` でも 300 秒のデフォルトタイムアウトを超えます
+- 5〜7 ファイルでも稠密なコードでは時々 300 秒に届くため、**`DUAL_TIMEOUT=600` をデフォルト的に持っておくと運用が安定**
 - 大量にある場合は分割実行: `/dual review src/api/*.ts` → 結果を表示 → 次に `/dual review src/db/*.ts` のように
-- やむを得ず大量を一括する場合は `DUAL_TIMEOUT=600`（または `900`）と `DUAL_REASONING=low` の併用
+- 実績ベースの観測値: コア 5 ファイル ~110s / UI 7 ファイル ~280s / 状態管理 5 ファイル は medium で 300s 超え (600s で完走)
 
 **手順**:
 1. Claude が対象を `Read` で読み込み、自身でレビュー（観点: セキュリティ / バグ / 可読性 / 設計 / テスト / 型）

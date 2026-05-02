@@ -57,6 +57,31 @@ teardown() {
   [[ "$output" == *"<--cd> <$(pwd)>"* ]]
 }
 
+@test "CODEX_CD: Windows path is converted via cygpath when available" {
+  # Simulate Git Bash / MSYS by stubbing cygpath
+  TARGET_DIR="$TEST_TMP/converted-target"
+  mkdir -p "$TARGET_DIR"
+  cat > "$TEST_TMP/bin/cygpath" <<EOF
+#!/usr/bin/env bash
+# Mock: convert any input to TARGET_DIR (proves the path was sent through cygpath)
+echo "$TARGET_DIR"
+EOF
+  chmod +x "$TEST_TMP/bin/cygpath"
+  CODEX_CD='O:\some\windows\path' run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<--cd> <$TARGET_DIR>"* ]]
+}
+
+@test "CODEX_CD: leaves POSIX path alone when no cygpath" {
+  TARGET_DIR="$TEST_TMP/posix-target"
+  mkdir -p "$TARGET_DIR"
+  # Ensure no cygpath in PATH
+  rm -f "$TEST_TMP/bin/cygpath"
+  CODEX_CD="$TARGET_DIR" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<--cd> <$TARGET_DIR>"* ]]
+}
+
 @test "plan-critique mode passes -m gpt-5.2 and reasoning=high" {
   run "$REPO_ROOT/$SCRIPT" plan-critique "$PROMPT"
   [ "$status" -eq 0 ]

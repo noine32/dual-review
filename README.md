@@ -155,6 +155,24 @@ CODEX_CD=/path/to/target-project /dual review src/auth.ts
 
 Without this, Codex's `--sandbox read-only` blocks reads outside the inherited CWD and returns 0 findings.
 
+#### Windows path format
+
+On Git Bash / MSYS, the script auto-converts Windows-style paths via `cygpath` when available (`O:\foo` → `/o/foo`). If `cygpath` is missing, pass the MSYS form yourself:
+
+```bash
+# Windows native, in Git Bash
+CODEX_CD=/o/youtube_downloader_app /dual review src/foo.py   # ✅ MSYS form
+CODEX_CD='O:\youtube_downloader_app' ...                      # ✅ auto-converted by cygpath
+```
+
+PowerShell users should set the variable in MSYS form before invoking, since the sandbox resolves paths relative to the bash environment.
+
+### Field-test notes (from real-world usage)
+
+- **`/tmp` mismatch on Windows**: Claude Code's `Write` tool may target Windows `%TEMP%` while bash sees Git Bash's `/tmp`. If the prompt file isn't found, write it via `bash -c 'cat <<EOF > /tmp/...'` heredoc instead of the `Write` tool, or set `TMPDIR` consistently.
+- **`DUAL_REASONING=low` quirk**: Some Codex sandbox policies surface as "shell command blocked" with `low` reasoning. Falling back to `medium` resolves it.
+- **5–7 files still occasionally hit 300s** at `medium` reasoning. Keep `DUAL_TIMEOUT=600` ready when batching dense code.
+
 **ChatGPT Plus only supports `gpt-5.2`.** Modes differ by `reasoning_effort` (review=`medium`, plan/critique=`high`) instead of model. `gpt-5.2-mini` / `gpt-5.2-max` and `xhigh` reasoning are Pro/Business-only and rejected by the API for Plus accounts.
 
 ## Smoke test (manual)

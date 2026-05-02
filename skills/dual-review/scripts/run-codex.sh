@@ -126,6 +126,16 @@ CODEX_CD_RESOLVED="${CODEX_CD:-$PWD}"
 if [[ -z "$CODEX_CD_RESOLVED" ]]; then
   CODEX_CD_RESOLVED="$PWD"
 fi
+
+# On Git Bash / MSYS, Windows-style paths (e.g. 'O:\foo\bar') must be converted
+# to MSYS form ('/o/foo/bar') for the sandbox to resolve them. Use cygpath if
+# available — it's a no-op for already-POSIX paths.
+if command -v cygpath >/dev/null 2>&1; then
+  if converted="$(cygpath "$CODEX_CD_RESOLVED" 2>/dev/null)" && [[ -n "$converted" ]]; then
+    CODEX_CD_RESOLVED="$converted"
+  fi
+fi
+
 if [[ ! -d "$CODEX_CD_RESOLVED" ]]; then
   echo "ERROR: CODEX_CD must be an existing directory (got: '$CODEX_CD_RESOLVED')" >&2
   exit 64
