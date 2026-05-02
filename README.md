@@ -129,11 +129,31 @@ See `skills/dual-review/SKILL.md` for the full trigger list and anti-misfire rul
 
 ### Environment overrides
 
-| Var | Default per mode | Effect |
+| Var | Default | Effect |
 |---|---|---|
-| `DUAL_MODEL` | `gpt-5.2` (all modes) | Override Codex model |
-| `DUAL_REASONING` | `high` or `medium` | Override reasoning effort |
-| `DUAL_TIMEOUT` | `300` | Codex timeout in seconds |
+| `DUAL_MODEL` | `gpt-5.2` | Override Codex model (Plus only supports `gpt-5.2`) |
+| `DUAL_REASONING` | `high` or `medium` | Override reasoning effort (`low|medium|high`) |
+| `DUAL_TIMEOUT` | `300` | Codex timeout in seconds (1..3600) |
+| `CODEX_CD` | `$PWD` | Directory codex runs in (sandbox read-only resolves paths from here) |
+| `DUAL_REQUIRE_GIT_REPO` | `0` | `1` to drop `--skip-git-repo-check` |
+| `DUAL_ALLOW_NO_TIMEOUT` | `0` | `1` to allow running without `timeout`/`gtimeout` (may hang) |
+| `DUAL_SHOW_STDERR` | `0` | `1` to print codex stderr inline on failure (may leak secrets) |
+
+### Scaling guidance (from real-world dogfood)
+
+- **5–7 files per call** is the sweet spot for `review` mode at default `gpt-5.2` + `medium` reasoning.
+- Large codebases: split into multiple `/dual review ...` calls instead of one giant target.
+- If you must batch many files: `DUAL_TIMEOUT=600` and `DUAL_REASONING=low`.
+
+### Reviewing a project in a different directory
+
+If your CWD is not the project being reviewed, set `CODEX_CD`:
+
+```bash
+CODEX_CD=/path/to/target-project /dual review src/auth.ts
+```
+
+Without this, Codex's `--sandbox read-only` blocks reads outside the inherited CWD and returns 0 findings.
 
 **ChatGPT Plus only supports `gpt-5.2`.** Modes differ by `reasoning_effort` (review=`medium`, plan/critique=`high`) instead of model. `gpt-5.2-mini` / `gpt-5.2-max` and `xhigh` reasoning are Pro/Business-only and rejected by the API for Plus accounts.
 

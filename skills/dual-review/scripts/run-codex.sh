@@ -118,6 +118,19 @@ if [[ "${DUAL_REQUIRE_GIT_REPO:-0}" != "1" ]]; then
   GIT_FLAG=(--skip-git-repo-check)
 fi
 
+# --cd: directory where codex runs and resolves --sandbox read-only paths.
+# Without this, codex inherits the caller's CWD, which may not contain the
+# target files (read-only sandbox blocks reads outside cwd → 0 findings).
+# Default: $PWD. Override with CODEX_CD when the target lives elsewhere.
+CODEX_CD_RESOLVED="${CODEX_CD:-$PWD}"
+if [[ -z "$CODEX_CD_RESOLVED" ]]; then
+  CODEX_CD_RESOLVED="$PWD"
+fi
+if [[ ! -d "$CODEX_CD_RESOLVED" ]]; then
+  echo "ERROR: CODEX_CD must be an existing directory (got: '$CODEX_CD_RESOLVED')" >&2
+  exit 64
+fi
+
 # Refuse to run without a timeout binary unless explicitly opted in.
 # Hanging codex calls block dogfood and are hard to abort.
 if [[ -z "$TIMEOUT_BIN" && "${DUAL_ALLOW_NO_TIMEOUT:-0}" != "1" ]]; then
@@ -134,6 +147,7 @@ if [[ -n "$TIMEOUT_BIN" ]]; then
   "$TIMEOUT_BIN" --foreground "${TIMEOUT}s" \
     codex exec \
       "${GIT_FLAG[@]}" \
+      --cd "$CODEX_CD_RESOLVED" \
       --sandbox read-only \
       -m "$MODEL" \
       --config "model_reasoning_effort=\"${REASONING}\"" \
@@ -144,6 +158,7 @@ else
   echo "Warning: timeout/gtimeout not found; running codex without timeout (Ctrl-C to abort if it hangs)" >&2
   codex exec \
     "${GIT_FLAG[@]}" \
+    --cd "$CODEX_CD_RESOLVED" \
     --sandbox read-only \
     -m "$MODEL" \
     --config "model_reasoning_effort=\"${REASONING}\"" \
@@ -158,6 +173,13 @@ if [[ $RC -ne 0 ]]; then
   # Otherwise, codex itself may have returned 124 for unrelated reasons.
   if [[ $RC -eq 124 && -n "$TIMEOUT_BIN" ]]; then
     echo "ERROR: codex timed out after ${TIMEOUT}s" >&2
+    cat <<HINT >&2
+Hints to retry:
+  - Extend timeout:    DUAL_TIMEOUT=600 (or 900) and re-run
+  - Faster reasoning:  DUAL_REASONING=low (lighter; less depth)
+  - Reduce input:      split target into <8 files per call
+                       (e.g. /dual review src/a.ts src/b.ts)
+HINT
   fi
   if [[ -s "$STDERR_FILE" ]]; then
     if [[ "${DUAL_SHOW_STDERR:-0}" == "1" ]]; then

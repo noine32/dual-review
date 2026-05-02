@@ -30,6 +30,33 @@ teardown() {
   [[ "$output" != *"<--skip-git-repo-check>"* ]]
 }
 
+@test "default passes --cd \$PWD to codex" {
+  run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<--cd>"* ]]
+  # The path passed should match $PWD
+  [[ "$output" == *"<$(pwd)>"* ]]
+}
+
+@test "CODEX_CD env overrides --cd" {
+  TARGET_DIR="$TEST_TMP/target-project"
+  mkdir -p "$TARGET_DIR"
+  CODEX_CD="$TARGET_DIR" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<--cd> <$TARGET_DIR>"* ]]
+}
+
+@test "CODEX_CD rejects non-existent directory" {
+  CODEX_CD="$TEST_TMP/does-not-exist" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 64 ]
+}
+
+@test "CODEX_CD rejects empty value (falls back to PWD)" {
+  CODEX_CD="" run "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<--cd> <$(pwd)>"* ]]
+}
+
 @test "plan-critique mode passes -m gpt-5.2 and reasoning=high" {
   run "$REPO_ROOT/$SCRIPT" plan-critique "$PROMPT"
   [ "$status" -eq 0 ]
@@ -171,6 +198,15 @@ EOF
   DUAL_TIMEOUT=1 run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
   [ "$status" -eq 124 ]
   [[ "$stderr" == *"codex timed out after"* ]]
+}
+
+@test "timeout error includes tuning hints" {
+  command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1 || skip "timeout/gtimeout not available"
+  install_codex_mock_slow 10
+  DUAL_TIMEOUT=1 run --separate-stderr "$REPO_ROOT/$SCRIPT" review "$PROMPT"
+  [ "$status" -eq 124 ]
+  [[ "$stderr" == *"DUAL_TIMEOUT"* ]]
+  [[ "$stderr" == *"DUAL_REASONING"* ]]
 }
 
 @test "DUAL_REASONING rejects values outside allow-list" {
